@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<title>손익입력</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon.svg">
+<link rel="manifest" href="site.webmanifest">
+<meta name="theme-color" content="#F2F2F7">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="손익입력">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', sans-serif;
+  background: #F2F2F7; color: #1C1C1E; min-height: 100dvh;
+  display: flex; align-items: center; justify-content: center; padding: 24px 16px;
+  -webkit-font-smoothing: antialiased;
+}
+.card { width: 100%; max-width: 360px; background: #fff; border-radius: 16px; padding: 28px 20px; text-align: center; }
+.icon { font-size: 40px; line-height: 1; margin-bottom: 12px; }
+h1 { font-size: 20px; font-weight: 700; margin-bottom: 6px; }
+p { font-size: 14px; color: #8E8E93; margin-bottom: 20px; }
+input {
+  width: 100%; font-size: 24px; letter-spacing: 8px; text-align: center; padding: 12px;
+  border: 1.5px solid rgba(60,60,67,0.18); border-radius: 12px; outline: none; font-family: inherit;
+}
+input:focus { border-color: #007AFF; }
+button {
+  width: 100%; margin-top: 14px; padding: 14px; border: none; border-radius: 12px;
+  background: #007AFF; color: #fff; font-size: 17px; font-weight: 600; font-family: inherit; cursor: pointer;
+}
+button:disabled { background: #AEAEB2; }
+.msg { min-height: 20px; margin-top: 12px; font-size: 14px; color: #FF3B30; }
+.loading { color: #8E8E93; }
+</style>
+</head>
+<body>
+<div class="card" id="card">
+  <div class="icon">📊</div>
+  <h1>손익입력</h1>
+  <p>PIN을 입력하세요</p>
+  <form id="f">
+    <input id="pin" type="password" inputmode="numeric" pattern="[0-9]*" autocomplete="current-password" maxlength="12" required>
+    <button id="btn" type="submit">열기</button>
+  </form>
+  <div class="msg" id="msg"></div>
+</div>
+<script>
+(function () {
+  var FN = 'https://ghptwxrixgogkvpxahoo.supabase.co/functions/v1/income-statement';
+  var KEY = 'app_pin';
+  var $ = function (id) { return document.getElementById(id); };
+  function get() { try { return localStorage.getItem(KEY); } catch (e) { return null; } }
+  function set(v) { try { localStorage.setItem(KEY, v); } catch (e) {} }
+  function clear() { try { localStorage.removeItem(KEY); } catch (e) {} }
+  function show(msg, loading) {
+    $('card').style.display = '';
+    $('btn').disabled = false;
+    $('msg').className = 'msg' + (loading ? ' loading' : '');
+    $('msg').textContent = msg || '';
+  }
+  // HTML 안 <script>에 넣을 문자열을 안전하게 직렬화
+  function js(v) { return JSON.stringify(v).replace(/</g, '\\u003c'); }
+
+  function boot(pin) {
+    show('불러오는 중...', true);
+    $('btn').disabled = true;
+    fetch(FN + '/api/app', { headers: { 'x-app-pin': pin }, cache: 'no-store' })
+      .then(function (r) {
+        return r.json().catch(function () { return {}; }).then(function (d) { return { r: r, d: d }; });
+      })
+      .then(function (x) {
+        if (x.r.status === 401) { clear(); show('PIN이 올바르지 않습니다'); return; }
+        if (!x.r.ok || !x.d.html) { show(x.d.error || '불러오기 실패 (' + x.r.status + ')'); return; }
+        set(pin);
+        var inject = '<script>window.__API_BASE__=' + js(FN) + ';window.__APP_PIN__=' + js(pin) + ';' +
+          '(function(){var f=window.fetch.bind(window),B=' + js(FN) + ',P=' + js(pin) + ';' +
+          'window.fetch=function(u,o){o=o||{};var s=typeof u==="string"?u:(u&&u.url)||"";' +
+          'if(s.indexOf(B)===0){var h=new Headers(o.headers||{});h.set("x-app-pin",P);o.headers=h;}' +
+          'return f(u,o);};})();<\/script>';
+        var html = x.d.html.replace(/<head>/i, '<head>' + inject);
+        document.open(); document.write(html); document.close();
+      })
+      .catch(function () { show('서버에 연결할 수 없습니다'); });
+  }
+
+  $('f').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var v = $('pin').value.trim();
+    if (v) boot(v);
+  });
+
+  var saved = get();
+  if (saved) boot(saved); else $('pin').focus();
+})();
+</script>
+</body>
+</html>
